@@ -2,10 +2,48 @@
 #include <MPU6050.h>
 #include <SdFat.h>
 
+#ifndef UTIL_H
+#define UTIL_H
 MPU6050 mpu;
+SdFs sd;
+FsFile file;
+unsigned long t_start = 0;
+char filename[32];
+bool is_logging;
+// void intervalFunc(void);
+// IntervalTimer timer;
+// int ticks = 0;
+
+/**
+ * Generates and selects an unused filename from the SD card. Currently implemented in an inefficient way that
+ * doesn't matter because it runs in setup and nowhere else. It works by incrementally mutating the passed buffer
+ * with filenames ranging from "D0.BIN" to "D999.BIN", then checking if they already exist on the SD card.
+ * If not, it returns. The program is expected to use the mutated char buffer to get the filename. It should
+ * only be called AFTER SD has successfully been initialized.
+ * */
+// CREDIT FOR THIS CODE GOES TO RAHUL
+void select_next_filename(char *buffer, SdFs *sd)
+{ // Passed buff should be of size FILENAME_SIZE
+  for (int fileNum = 0; fileNum < 1000; fileNum++)
+  {
+    char fileNumber[5]; // 4-character number + null
+    sprintf(fileNumber, "%d", fileNum);
+    strcpy(buffer, "Accel_Data_");
+    strcat(buffer, fileNumber);
+    strcat(buffer, ".csv");
+    // debugl(buffer);
+    if (!sd->exists(buffer))
+    {
+      return;
+    }
+  }
+}
+
+#endif
 
 void setup()
 {
+
   Serial.begin(115200);
   while (!mpu.begin(MPU6050_SCALE_2000DPS, MPU6050_RANGE_2G))
   {
@@ -16,8 +54,23 @@ void setup()
   // Calibrate gyroscope. The calibration must be at rest.
   // If you don't want calibrate, comment this line.
   mpu.calibrateGyro();
-
+  // timer.begin(intervalFunc, 100000);
   Serial.println("Initialize MPU6050");
+}
+
+void init_log()
+{
+
+  select_next_filename(filename, &sd);
+  if (!file.open(filename, O_RDWR | O_CREAT))
+  {
+    return;
+  }
+
+  file.printf(
+      "Linear_X (m/s^2), Linear_Y (m/s^2), Linear_Z (m/s^2), Gyro_X (rad/s), Gyro_Y (rad/s), Gyro_Z (rad/s)\n");
+  t_start = millis();
+  is_logging = true;
 }
 
 void checkSettings()
@@ -82,19 +135,55 @@ void checkSettings()
 
 void loop()
 {
-  // put your main code here, to run repeatedly:
+  if (digitalRead(20) == 1)
+  {
+    // stop the csv file here
+    file.close();
+  }
+
+  // Prints Linear data
+  Vector rawAccel = mpu.readRawAccel();
+  Vector normAccel = mpu.readNormalizeAccel();
+
+  // Uncomment if you want to run raw data
+  // Serial.print(rawAccel.XAxis);
+  // Serial.print(" ");
+  // Serial.print(rawAccel.YAxis);
+  // Serial.print(" ");
+  // Serial.println(rawAccel.ZAxis);
+
+  // Comment if you want to run normalized acceleration
+  Serial.print(normAccel.XAxis);
+  Serial.print(" ");
+  Serial.print(normAccel.YAxis);
+  Serial.print(" ");
+  Serial.println(normAccel.ZAxis);
+
+  // Prints Gyro data
   Vector rawGyro = mpu.readRawGyro();
   Vector normGyro = mpu.readNormalizeGyro();
-  Serial.print(" Xraw = ");
-  Serial.print(rawGyro.XAxis);
-  Serial.print(" Yraw = ");
-  Serial.print(rawGyro.YAxis);
-  Serial.print(" Zraw = ");
-  Serial.println(rawGyro.ZAxis);
-  Serial.print(" Xnorm = ");
+
+  // Uncomment if you want to run raw data
+  // Serial.print(rawGyro.XAxis);
+  // Serial.print(" ");
+  // Serial.print(rawGyro.YAxis);
+  // Serial.print(" ");
+  // Serial.println(rawGyro.ZAxis);
+
   Serial.print(normGyro.XAxis);
-  Serial.print(" Ynorm = ");
+  Serial.print(" ");
   Serial.print(normGyro.YAxis);
-  Serial.print(" Znorm = ");
+  Serial.print(" ");
   Serial.println(normGyro.ZAxis);
+  // ticks++;
+
+  file.printf("%f, %f, %f, %f, %f, %f\n", normAccel.XAxis, normAccel.YAxis, normAccel.ZAxis, normGyro.XAxis, normGyro.YAxis, normGyro.ZAxis);
+  // file.printf("%f, %f, %f, %f, %f, %f\n", rawAccel.XAxis, rawAccel.YAxis, rawAccel.ZAxis, rawGyro.XAxis, rawGyro.YAxis, rawGyro.ZAxis);
 }
+
+// void intervalFunc(void)
+// {
+//   Serial.println("One second");
+//   Serial.println(ticks);
+//   ticks = 0;
+// }

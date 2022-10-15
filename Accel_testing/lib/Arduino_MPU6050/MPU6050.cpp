@@ -35,6 +35,7 @@ bool MPU6050::begin(mpu6050_dps_t scale, mpu6050_range_t range, int mpua)
     mpuAddress = mpua;
 
     Wire.begin();
+    Wire.setClock(1000000);
 
     // Reset calibrate values
     dg.XAxis = 0;
